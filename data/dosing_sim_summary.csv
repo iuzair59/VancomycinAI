@@ -1,0 +1,7 @@
+strategy,pct_in_target,pct_below,pct_above,median_abs_dev_from_500
+Regimen actually received,28.3,29.2,42.5,199.5
+Model-guided: PopPK + TDM,75.8,3.3,20.8,53.6
+Model-guided: ML (gradient boosting),84.2,3.3,12.5,39.4
+Model-guided: Hybrid A (stacked),87.5,4.2,8.3,34.6
+Model-guided: Hybrid B (residual),89.2,3.3,7.5,32.9
+Oracle (knows true clearance),100.0,0.0,0.0,15.3

@@ -1,0 +1,9 @@
+.DS_Store
+.Rhistory
+.vscode/
+__pycache__/
+*.pyc
+.venv/
+Manifest.toml
+*.key
+*.lic

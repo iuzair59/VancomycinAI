@@ -1,0 +1,21 @@
+comparison,metric,diff,ci_low,ci_high,ci_excludes_0
+ML (gradient boosting)  minus  PopPK + TDM,MAE,-17.995,-27.923,-8.19,True
+ML (gradient boosting)  minus  PopPK + TDM,RMSE,-25.516,-38.64,-11.138,True
+ML (gradient boosting)  minus  PopPK + TDM,within20 (frac),0.058,-0.008,0.125,False
+ML (gradient boosting)  minus  PopPK + TDM,target-agree (frac),-0.001,-0.067,0.067,False
+Hybrid A (stacked)  minus  PopPK + TDM,MAE,-24.378,-33.898,-14.984,True
+Hybrid A (stacked)  minus  PopPK + TDM,RMSE,-35.843,-45.689,-24.499,True
+Hybrid A (stacked)  minus  PopPK + TDM,within20 (frac),0.049,-0.017,0.117,False
+Hybrid A (stacked)  minus  PopPK + TDM,target-agree (frac),0.049,-0.008,0.108,False
+Hybrid B (residual)  minus  PopPK + TDM,MAE,-27.136,-37.511,-17.045,True
+Hybrid B (residual)  minus  PopPK + TDM,RMSE,-39.561,-52.407,-25.708,True
+Hybrid B (residual)  minus  PopPK + TDM,within20 (frac),0.066,0.0,0.133,False
+Hybrid B (residual)  minus  PopPK + TDM,target-agree (frac),0.033,-0.017,0.083,False
+Hybrid A (stacked)  minus  ML (gradient boosting),MAE,-6.382,-13.35,0.041,False
+Hybrid A (stacked)  minus  ML (gradient boosting),RMSE,-10.327,-21.511,-0.419,True
+Hybrid A (stacked)  minus  ML (gradient boosting),within20 (frac),-0.008,-0.05,0.033,False
+Hybrid A (stacked)  minus  ML (gradient boosting),target-agree (frac),0.05,0.008,0.1,True
+Hybrid B (residual)  minus  ML (gradient boosting),MAE,-9.141,-17.577,-1.762,True
+Hybrid B (residual)  minus  ML (gradient boosting),RMSE,-14.045,-29.462,0.422,False
+Hybrid B (residual)  minus  ML (gradient boosting),within20 (frac),0.008,-0.025,0.042,False
+Hybrid B (residual)  minus  ML (gradient boosting),target-agree (frac),0.034,-0.008,0.083,False
