@@ -31,6 +31,11 @@ MAX_DAILY_DOSE = 4500                      # mg/day cap on candidate regimens
 truth = pd.read_csv(DATA / "vanco_truth.csv")[["ID", "TRUE_CL", "TRUE_AUC24"]]
 pts = pd.read_csv(DATA / "vanco_patients.csv")[["ID", "DOSE", "INTERVAL", "SPLIT"]]
 pred = pd.read_csv(DATA / "hybrid_test_predictions.csv")
+# two-compartment PopPK benchmark (Pumas), same 120 test patients
+pk2 = pd.read_csv(DATA / "poppk2cmt_test_auc24.csv")[["ID", "AUC24_POPPK2"]].rename(
+    columns={"AUC24_POPPK2": "PopPK 2-cmt + TDM"})
+pred = pred.merge(pk2, on="ID", how="inner")
+assert len(pred) == 120
 
 df = pred.merge(truth[["ID", "TRUE_CL"]], on="ID").merge(pts[["ID", "DOSE", "INTERVAL"]], on="ID")
 df["DAILY_DOSE_CURRENT"] = df.DOSE * 24 / df.INTERVAL
@@ -42,6 +47,7 @@ CANDIDATES = pd.DataFrame(
 
 METHOD_COLS = {
     "PopPK + TDM": "PopPK + TDM",
+    "PopPK 2-cmt + TDM": "PopPK 2-cmt + TDM",
     "ML (gradient boosting)": "ML (gradient boosting)",
     "Hybrid A (stacked)": "Hybrid A (stacked)",
     "Hybrid B (residual)": "Hybrid B (residual)",

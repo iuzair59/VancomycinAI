@@ -1,0 +1,17 @@
+comparison,metric,diff,ci_low,ci_high,ci_excludes_0
+PopPK 2-cmt + TDM  minus  PopPK + TDM,MAE,-25.368,-33.991,-17.117,True
+PopPK 2-cmt + TDM  minus  PopPK + TDM,RMSE,-36.823,-49.972,-24.075,True
+PopPK 2-cmt + TDM  minus  PopPK + TDM,within20 (frac),0.066,0.017,0.125,True
+PopPK 2-cmt + TDM  minus  PopPK + TDM,target-agree (frac),0.042,0.0,0.083,False
+ML (gradient boosting)  minus  PopPK 2-cmt + TDM,MAE,7.402,0.432,14.651,True
+ML (gradient boosting)  minus  PopPK 2-cmt + TDM,RMSE,11.371,-2.466,25.66,False
+ML (gradient boosting)  minus  PopPK 2-cmt + TDM,within20 (frac),-0.009,-0.05,0.033,False
+ML (gradient boosting)  minus  PopPK 2-cmt + TDM,target-agree (frac),-0.042,-0.092,0.008,False
+Hybrid A (stacked)  minus  PopPK 2-cmt + TDM,MAE,0.978,-4.248,6.296,False
+Hybrid A (stacked)  minus  PopPK 2-cmt + TDM,RMSE,0.997,-7.505,10.87,False
+Hybrid A (stacked)  minus  PopPK 2-cmt + TDM,within20 (frac),-0.017,-0.058,0.025,False
+Hybrid A (stacked)  minus  PopPK 2-cmt + TDM,target-agree (frac),0.008,-0.025,0.05,False
+Hybrid B (residual)  minus  PopPK 2-cmt + TDM,MAE,-1.779,-7.078,3.051,False
+Hybrid B (residual)  minus  PopPK 2-cmt + TDM,RMSE,-2.712,-8.932,2.751,False
+Hybrid B (residual)  minus  PopPK 2-cmt + TDM,within20 (frac),-0.0,-0.033,0.033,False
+Hybrid B (residual)  minus  PopPK 2-cmt + TDM,target-agree (frac),-0.009,-0.042,0.025,False

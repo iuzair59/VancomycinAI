@@ -9,6 +9,10 @@ import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
+import inspect
+# Streamlit >= 1.49 uses width="stretch"; older versions use use_container_width=True
+W = ({"width": "stretch"} if "width" in inspect.signature(st.altair_chart).parameters
+     else {"use_container_width": True})
 
 DATA = Path(__file__).parent / "data"
 TARGET_LO, TARGET_HI = 400, 600
@@ -17,7 +21,8 @@ TV_V_70KG = 49.08          # typical volume (L at 70 kg) from the Pumas one-comp
 # Reference categorical palette (slots 1-2) and neutral ink
 BLUE, ORANGE, MUTED, GRID = "#2a78d6", "#eb6834", "#898781", "#c3c2b7"
 
-METHODS = ["PopPK + TDM", "ML (gradient boosting)", "Hybrid A (stacked)", "Hybrid B (residual)"]
+METHODS = ["PopPK 1-cmt + TDM", "PopPK 2-cmt + TDM", "DeepPumas covariate NN",
+           "ML (gradient boosting)", "Hybrid A (stacked)", "Hybrid B (residual)"]
 
 st.set_page_config(page_title="VancomycinAI", layout="wide")
 
@@ -25,16 +30,37 @@ st.set_page_config(page_title="VancomycinAI", layout="wide")
 # ----------------------------------------------------------------------------- data
 @st.cache_data
 def load():
-    d = {
-        "pred": pd.read_csv(DATA / "hybrid_test_predictions.csv"),
+    old = "PopPK + TDM"
+    new = "PopPK 1-cmt + TDM"
+    pred = pd.read_csv(DATA / "hybrid_test_predictions.csv").rename(columns={old: new})
+    pk2 = pd.read_csv(DATA / "poppk2cmt_test_auc24.csv")[["ID", "AUC24_POPPK2"]].rename(
+        columns={"AUC24_POPPK2": "PopPK 2-cmt + TDM"})
+    pred = pred.merge(pk2, on="ID", how="left")
+    dp_path = DATA / "deeppumas_test_auc24.csv"          # optional: only if the DeepPumas step was run
+    if dp_path.exists():
+        dp = pd.read_csv(dp_path)[["ID", "AUC24_DEEPPUMAS"]].rename(
+            columns={"AUC24_DEEPPUMAS": "DeepPumas covariate NN"})
+        pred = pred.merge(dp, on="ID", how="left")
+
+    sim_pat = pd.read_csv(DATA / "dosing_sim_patients.csv")
+    sim_pat.columns = [c.replace(old + "|", new + "|") for c in sim_pat.columns]
+    sim_sum = pd.read_csv(DATA / "dosing_sim_summary.csv")
+    sim_sum["strategy"] = sim_sum.strategy.str.replace(old, new, regex=False)
+
+    b_old = pd.read_csv(DATA / "bootstrap_comparison.csv")
+    b_new = pd.read_csv(DATA / "bootstrap_vs_twocmt.csv")
+    boot = pd.concat([b_new, b_old], ignore_index=True)
+    boot["comparison"] = boot.comparison.str.replace(old, new, regex=False)
+    boot = boot.drop_duplicates(subset=["comparison", "metric"])
+    return {
+        "pred": pred,
         "pts": pd.read_csv(DATA / "vanco_patients.csv"),
         "truth": pd.read_csv(DATA / "vanco_truth.csv"),
         "ev": pd.read_csv(DATA / "vanco_pk_nonmem.csv"),
-        "boot": pd.read_csv(DATA / "bootstrap_comparison.csv"),
-        "sim_pat": pd.read_csv(DATA / "dosing_sim_patients.csv"),
-        "sim_sum": pd.read_csv(DATA / "dosing_sim_summary.csv"),
+        "boot": boot,
+        "sim_pat": sim_pat,
+        "sim_sum": sim_sum,
     }
-    return d
 
 
 def metrics(pred, truth):
@@ -76,11 +102,13 @@ def altair_defaults(chart):
 
 D = load()
 pred, pts, truth, ev = D["pred"], D["pts"], D["truth"], D["ev"]
+METHODS = [m for m in METHODS if m in pred.columns]     # skip methods whose results file is absent
 
 # ----------------------------------------------------------------------------- header
 st.title("VancomycinAI")
 st.caption("Hybrid population-PK and machine-learning estimation of vancomycin AUC24 · "
-           "Pumas one-compartment model, gradient boosting, and two hybrids")
+           "Pumas one- and two-compartment models, a DeepPumas covariate network, "
+           "gradient boosting, and two hybrids")
 st.warning(
     "**Research output only. Not for clinical use.** All patients here are simulated. "
     "Nothing on this page is a dosing recommendation for any real patient.",
@@ -95,13 +123,18 @@ with tab1:
     st.subheader("How well does each method estimate AUC24?")
     st.caption(f"{len(pred)} held-out test patients, evaluated once. "
                "Reference = true AUC24 from the simulation (mg·h/L).")
+    st.info(
+        "**Key finding.** A correctly structured (two-compartment) PopPK model is about as accurate "
+        "as the best hybrids. The hybrids mainly repair a misspecified one-compartment model; "
+        "their remaining edge over two-compartment PopPK is within noise. The DeepPumas covariate "
+        "network did not improve the one-compartment model.", icon="🔎")
     rows = {m: metrics(pred[m].values, pred.TRUE_AUC24.values) for m in METHODS}
     mt = pd.DataFrame(rows).T.round(1)
-    st.dataframe(mt.style.format("{:.1f}"), width="stretch")
+    st.dataframe(mt.style.format("{:.1f}"), **W)
 
     st.markdown("**Predicted vs true AUC24** — the dashed line is perfect agreement. "
                 "Dotted lines mark the 400–600 target.")
-    cols = st.columns(2)
+    cols = st.columns(3)
     for i, m in enumerate(METHODS):
         df_m = pd.DataFrame({"True AUC24": pred.TRUE_AUC24, "Predicted AUC24": pred[m],
                              "Patient": pred.ID})
@@ -116,26 +149,28 @@ with tab1:
             color=GRID, strokeDash=[1, 3]).encode(y="v:Q")
         bandsx = alt.Chart(pd.DataFrame({"v": [TARGET_LO, TARGET_HI]})).mark_rule(
             color=GRID, strokeDash=[1, 3]).encode(x="v:Q")
-        ch = (bands + bandsx + diag + pts_c).properties(title=m, height=300)
-        with cols[i % 2]:
-            st.altair_chart(altair_defaults(ch), width="stretch")
+        ch = (bands + bandsx + diag + pts_c).properties(title=m, height=280)
+        with cols[i % 3]:
+            st.altair_chart(altair_defaults(ch), **W)
 
     st.markdown("**Is the difference real?** Paired bootstrap over the test patients "
                 "(difference in error; negative MAE/RMSE difference = first method better).")
     b = D["boot"].copy()
     b = b[b.metric.isin(["MAE", "RMSE"])]
+    b = b[b.comparison.str.contains("2-cmt|1-cmt", regex=True)]
     b["diff"] = b["diff"].round(1)
     b["95% interval"] = b.ci_low.round(1).astype(str) + " to " + b.ci_high.round(1).astype(str)
     b["clearly different"] = np.where(b.ci_excludes_0, "yes", "no")
     st.dataframe(b[["comparison", "metric", "diff", "95% interval", "clearly different"]]
-                 .rename(columns={"diff": "difference"}), width="stretch", hide_index=True)
+                 .rename(columns={"diff": "difference"}), **W, hide_index=True)
 
 # ----------------------------------------------------------------------------- tab 2
 with tab2:
     st.subheader("Patient explorer")
     c_sel, c_m = st.columns([1, 2])
     pid = c_sel.selectbox("Test patient", pred.ID.tolist(), index=0)
-    method = c_m.radio("Estimate clearance with", METHODS, index=3, horizontal=True)
+    method = c_m.radio("Estimate clearance with", METHODS,
+                       index=METHODS.index("Hybrid B (residual)"), horizontal=True)
 
     p = pts[pts.ID == pid].iloc[0]
     pr = pred[pred.ID == pid].iloc[0]
@@ -184,7 +219,7 @@ with tab2:
                  alt.Tooltip("Concentration (mg/L):Q", format=".1f")])
     st.altair_chart(altair_defaults((shade + line + dots).properties(
         height=320, title="Estimated concentration-time curve vs measured samples")),
-        width="stretch")
+        **W)
     st.caption("Grey band = mean concentration equivalent to AUC24 400–600 (≈ 16.7–25 mg/L). "
                "The curve is an approximation: one compartment, with the volume taken from the "
                "population fit scaled by weight; the clearance comes from the method selected above.")
@@ -215,11 +250,11 @@ with tab2:
         tooltip=[alt.Tooltip("Hours:Q", format=".0f"), alt.Tooltip("Concentration (mg/L):Q", format=".1f")])
     st.altair_chart(altair_defaults((shade2 + ln2).properties(height=240,
                     title=f"Simulated profile · {alt_dose} mg every {alt_int} h")),
-                    width="stretch")
+                    **W)
 
     sp = D["sim_pat"]
     sp = sp[sp.ID == pid]
-    if len(sp):
+    if len(sp) and f"{method}|DOSE" in sp.columns:
         r = sp.iloc[0]
         sel = f"{int(r[f'{method}|DOSE'])} mg q{int(r[f'{method}|INTERVAL'])}h"
         st.info(f"In the dosing simulation, **{method}** would select **{sel}** for this patient "
@@ -250,11 +285,11 @@ with tab3:
     txt = alt.Chart(ss).mark_text(align="left", dx=6, color=MUTED).encode(
         y=alt.Y("label:N", sort=order), x="pct_in_target:Q",
         text=alt.Text("pct_in_target:Q", format=".0f"))
-    st.altair_chart(altair_defaults((bars + txt).properties(height=300)), width="stretch")
+    st.altair_chart(altair_defaults((bars + txt).properties(height=300)), **W)
     show = ss[["label", "pct_in_target", "pct_below", "pct_above", "median_abs_dev_from_500"]].rename(
         columns={"label": "strategy", "pct_in_target": "% in target", "pct_below": "% below",
                  "pct_above": "% above", "median_abs_dev_from_500": "median |AUC24 − 500|"})
-    st.dataframe(show, hide_index=True, width="stretch")
+    st.dataframe(show, hide_index=True, **W)
     st.caption("The 'regimen actually received' row comes from a simple simulated hospital protocol "
                "(≈15 mg/kg, interval by CrCl band) that does not use drug levels, so it is a weak "
                "comparator. The oracle knows each patient's true clearance and is the ceiling.")
@@ -263,19 +298,23 @@ with tab3:
 with tab4:
     st.subheader("About and limits")
     st.markdown("""
-**What this is.** A portfolio research project comparing four ways to estimate vancomycin AUC24:
-a Pumas one-compartment population PK model, gradient-boosted machine learning, and two hybrids
-(PopPK estimates fed into ML; ML correcting the PopPK estimate).
+**What this is.** A portfolio research project comparing ways to estimate vancomycin AUC24:
+Pumas one- and two-compartment population PK models, a DeepPumas neural-network covariate model,
+gradient-boosted machine learning, and two hybrids (PopPK estimates fed into ML; ML correcting
+the PopPK estimate).
 
 **Data.** 600 simulated adult inpatients from a two-compartment model with nonlinear covariate
-effects and an ICU effect on volume. The PopPK model is deliberately simpler than this truth,
-so a correction layer has something to fix. Patients 1–480 train, 481–600 are the held-out test set.
+effects and an ICU effect on volume. The one-compartment model is deliberately wrong; the
+two-compartment model has the right structure but still simple covariate effects.
+Patients 1–480 train, 481–600 are the held-out test set.
 
 **Main limits**
 - Simulated data cannot show clinical validity; external validation on de-identified clinical data is needed.
 - The ML models were trained on the true simulated AUC24, which real data does not provide.
 - PopPK estimates for training patients are in-sample; cross-fitting would be cleaner.
-- One simulated dataset and 120 test patients; the dosing simulation assumes steady state and linear kinetics.
+- One simulated dataset and 120 test patients; differences between the best methods are within noise.
+- The dosing simulation assumes steady state and linear kinetics.
+- The DeepPumas network used a small fixed architecture without hyperparameter tuning.
 - The concentration-time curves on this page are approximations (one compartment, scaled typical volume).
 
 **Not for clinical use.** Do not use any output here to dose a real patient.
